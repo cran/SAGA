@@ -17,12 +17,12 @@ see how well defined the "true" model is with their dataset.
 \details{
 \tabular{ll}{
 Package: \tab SAGA\cr
-Version: \tab 1.0\cr
+Version: \tab 2.0.0\cr
 }
 }
 \author{
 Heath Blackmon and Jeffery P. Demuth\cr
 coleoguy@gmail.com}
 \references{
-Lynch and Walsh 1998\cr
-Burnham and Anderson 2002}
+Lynch, M. and B. Walsh. 1998. Genetics and analysis of quantitative traits. Sinauer Associates, Inc., Sunderland, Massachusetts.\cr\cr
+Burnham, K. P. and D. R. Anderson. 2002. Model selection and multimodel inference: a practical information-theoretic approach. Springer Science & Business Media.}

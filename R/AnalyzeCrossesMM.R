@@ -1,17 +1,67 @@
-AnalyzeCrossesMM <- function(data, Cmatrix = "MP", model.sum = .95, 
-                             max.models = 50000, even.sex = F, graph=F,
-                             cex.axis=1, cex.names=1, cex.main=1){
-  #Used for pretty scale bar
-  ## load the possible contributions to genetic variance of lines
-  if(is.vector(Cmatrix)){
-    if(Cmatrix == "MP"){
-      Cmatrix <- read.csv(file = system.file("Cmatrix.mp.csv", package = "SAGA"), row.names=1)[, -1]
-      # remove the effects that are not estimable with mixed sex lines
-      if(even.sex == F){
-        Cmatrix <- Cmatrix[, c(4,5,6,13:19,22:24) * -1]
+AnalyzeCrossesMM <- function(data, Cmatrix = "XY", model.sum = .95, 
+                             max.models = 300000, even.sex = F, graph=F,
+                             cex.axis=1, cex.names=1, cex.main=1, max.pars = NULL){
+  # lets store the graphic paratmeters so we leave people 
+  # unscathed for their next plots
+  old.par <- par()
+  old.par <- old.par[c(1:12,14:18,20,24:53,55:72)]
+  
+  # lets check and make sure that people picked or supplied a cmatrix
+  if(is.null(Cmatrix)) stop("Please supply or choose a Cmatrix")
+  
+  # if they are supplying the Cmatrix lets do a couple of basic checks
+  if(!is.null(Cmatrix)){
+    if(!is.vector(Cmatrix)){
+      # is it even a matrix
+      if(!is.matrix(Cmatrix)) stop("Your supplied c-matrix is not a matrix")
+      # does it contain the cohorts we need
+      if(!sum(data[,1] %in% Cmatrix[,1]) == nrow(data)){
+        stop("The cohort IDs in your data don't match those in your c-matrix")
       }
     }
   }
+  
+  ## load the possible contributions to cohort means
+  if(is.vector(Cmatrix)){
+    if(Cmatrix == "XY"){
+      Cmatrix <- read.csv(file = system.file("cmatrix.xy.csv", package = "SAGA"), row.names=1)[, -1]
+      # remove the effects that are not estimable 
+      # with mixed sex lines of unequal ratios
+      if(even.sex == F){
+        Cmatrix <- Cmatrix[, c(4:6,13:19,22:24) * -1]
+      }
+    } else if(Cmatrix == "XO" | Cmatrix == "X0"){
+      Cmatrix <- read.csv(file = system.file("cmatrix.xy.csv", package = "SAGA"), row.names=1)[, -1]
+      # remove the Y chromosome effects
+      Cmatrix <- Cmatrix[, c(6,17:19,24) * -1]
+      # remove the effects that are not estimable 
+      # with mixed sex lines of unequal ratios
+      if(even.sex == F){
+        Cmatrix <- Cmatrix[, c(4:5,12:15,18:19) * -1]
+      }
+    } else if(Cmatrix == "ZW"){
+      Cmatrix <- read.csv(file = system.file("cmatrix.zw.csv", package = "SAGA"), row.names=1)[, -1]
+      # remove the effects that are not estimable 
+      # with mixed sex lines of unequal ratios
+      if(even.sex == F){
+        Cmatrix <- Cmatrix[, c(4:6,13:19,22:24) * -1]
+      }
+    } else if(Cmatrix == "ZO" | Cmatrix == "Z0"){
+      Cmatrix <- read.csv(file = system.file("cmatrix.zw.csv", package = "SAGA"), row.names=1)[, -1]
+      # remove the W chromosome effects
+      Cmatrix <- Cmatrix[, c(6,17:19,24) * -1]
+      # remove the effects that are not estimable 
+      # with mixed sex lines of unequal ratios
+      if(even.sex == F){
+        Cmatrix <- Cmatrix[, c(4:5,12:15,18:19) * -1]
+      }
+    } else if(Cmatrix == "esd"){
+      Cmatrix <- read.csv(file = system.file("cmatrix.esd.csv", package = "SAGA"), row.names=1)[, -1]
+    } else {
+      stop("Your selection for the c-matrix to use does not match any of the options")
+    }
+  }
+  
   # store the identity of the cohorts
   identities <- data[,1]
   # remove them from the dataframe we will be using for analysis
@@ -19,17 +69,8 @@ AnalyzeCrossesMM <- function(data, Cmatrix = "MP", model.sum = .95,
   # keep only those lines that correspond to crosses that thee user has data for
   red.Cmatrix <- Cmatrix[identities,]  
   # lets remove variables that have no difference in lines
-  tracker <- vector()
-  for(i in 2:length(colnames(red.Cmatrix))){
-    if(var(red.Cmatrix[,i]) == 0){
-      tracker <- c(tracker, i)
-    }
-  }
-  if(length(tracker) > 0){
-    for(i in length(tracker):1){
-      red.Cmatrix <- red.Cmatrix[, -tracker[i]]      
-    }
-  }
+  red.Cmatrix <- red.Cmatrix[, c(1, which(apply(red.Cmatrix, 2, var) != 0))]      
+
   #lets look for composite effects that are identical
   drop.counter <- vector()
   for(i in 2:(ncol(red.Cmatrix)-1)){
@@ -55,6 +96,7 @@ AnalyzeCrossesMM <- function(data, Cmatrix = "MP", model.sum = .95,
   # one less choice to make
   mod.space.size <- sum(choose(ncol(red.Cmatrix) -1 , 
                                1:(nrow(red.Cmatrix) - 2)))
+  if(!is.null(max.pars)) mod.space.size <- sum(choose((ncol(red.Cmatrix) -1), 1:max.pars))
   # warn the user if the model space is very large
   if(mod.space.size > 5000){
     cat(paste("Since there are ", mod.space.size, " possible models this may take a bit:\n", sep=""))
@@ -64,6 +106,12 @@ AnalyzeCrossesMM <- function(data, Cmatrix = "MP", model.sum = .95,
   eqns <- list()                              # store the eqns
   counter <- 1                                # index for eqns
   max.par <- nrow(red.Cmatrix) - 2            #
+  # if a user has very many cohorts model space can become problematically large
+  # however I think that actually very few datasets support >>large models with 
+  # many important factors.  So one solution is simply to allow users to set a max
+  # model size this makes things fairly easy to handle
+  if(!is.null(max.pars)) max.par <- max.pars
+  
   cat(paste("Generating Models"))
   if(length(pos.cols) < max.par){
     max.par <- length(pos.cols)
@@ -246,40 +294,40 @@ AnalyzeCrossesMM <- function(data, Cmatrix = "MP", model.sum = .95,
                           'Unconditional Standard Error')
   results[1, ] <- par.est[nrow(par.est), 2:(ncol(par.est) - 1)]
   results[2, ] <- var.est[nrow(var.est), 2:(ncol(var.est) - 1)]
-  # make colors for barplot
-  # get some extra room
-  par(mar=c(2, 2, 2, 6))
-  foo.colors <- heat.colors(100)[100:1]
-  plot.colors <- vector()
-  counter <- 0
-  plot.colors <- rep(0, (ncol(results) - 1))
-  names(plot.colors) <- colnames(results)[2:ncol(results)]
-  for(i in 2:ncol(results)){
-    counter <- counter + 1
-    if(colnames(results)[i] %in% new.vars[, 1]){
-      plot.colors[counter] <- round(as.numeric(new.vars[new.vars[, 1] == colnames(results)[i], 2]) * 100)
-    }
-    if(plot.colors[counter] == 0){
-      plot.colors[counter] <- 1
-    }
-  }
-  maxval <- max(as.numeric(results[1, 2:ncol(results)]) + 
-                  as.numeric(results[2, 2:ncol(results)]))
-  # this is a little fix for when everything is below 0
-  if(maxval < 0){
-    maxval <- 0
-  }
-  minval <- min(as.numeric(results[1, 2:ncol(results)]) - 
-                  as.numeric(results[2, 2:ncol(results)]))
-  if(minval > 0){
-    minval <- 0
-  }
   if(graph == T){
+    # make colors for barplot
+    # get some extra room
+    par(mar=c(2, 2, 2, 6))
+    foo.colors <- heat.colors(100)[100:1]
+    plot.colors <- vector()
+    counter <- 0
+    plot.colors <- rep(0, (ncol(results) - 1))
+    names(plot.colors) <- colnames(results)[2:ncol(results)]
+    for(i in 2:ncol(results)){
+      counter <- counter + 1
+      if(colnames(results)[i] %in% new.vars[, 1]){
+        plot.colors[counter] <- round(as.numeric(new.vars[new.vars[, 1] == colnames(results)[i], 2]) * 100)
+      }
+      if(plot.colors[counter] == 0){
+        plot.colors[counter] <- 1
+      }
+    }
+    maxval <- max(as.numeric(results[1, 2:ncol(results)]) + 
+                    as.numeric(results[2, 2:ncol(results)]))
+    # this is a little fix for when everything is below 0
+    if(maxval < 0){
+      maxval <- 0
+    }
+    minval <- min(as.numeric(results[1, 2:ncol(results)]) - 
+                    as.numeric(results[2, 2:ncol(results)]))
+    if(minval > 0){
+      minval <- 0
+    }
     if(length(best.eqns.w) > 1){
       mp <- barplot(as.numeric(results[1,2:ncol(results)]), 
                     names.arg=colnames(results)[2:ncol(results)], 
                     col=foo.colors[as.vector(plot.colors)],
-                    ylim = c(minval-1, maxval+1), 
+                    ylim = c(minval - .4 * abs(minval), maxval + .4 * abs(maxval)), 
                     main = "Model Weighted Averages and Unc. SE", 
                     cex.axis=cex.axis, cex.names=cex.names, cex.main=cex.main)
       segments(mp, as.numeric(results[1,2:ncol(results)]) - 
@@ -329,7 +377,7 @@ AnalyzeCrossesMM <- function(data, Cmatrix = "MP", model.sum = .95,
       }
       mp <- barplot(par.est, names.arg=pars.1, 
                     main = "Single Model Means and Cond. SE",
-                    ylim = c(min.val - 0.2, max.val + 0.2), 
+                    ylim = c(minval - .4 * minval, maxval + .4 * maxval), 
                     cex.axis=cex.axis, cex.names=cex.names, cex.main=cex.main)   
       high.se <- par.est + se.est
       low.se <- par.est - se.est
@@ -362,5 +410,8 @@ AnalyzeCrossesMM <- function(data, Cmatrix = "MP", model.sum = .95,
   final.results[[4]] <- new.vars
   names(final.results) <- c("models", "estimates", "daicc", "varimp")
   class(final.results) <- "genarch"
+  
+  # lets reset peoples graphics paramters so they make sinces again
+  par(old.par)
   return(final.results)
 }

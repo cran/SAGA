@@ -5,13 +5,13 @@
 Display a matrix of composite genetic effects
 }
 \usage{
-DisplayCmatrix(table = "MP")
+DisplayCmatrix(table = "XY")
 }
 \arguments{
-  \item{table}{a character string specifying "MP" for midparent scaling}
+  \item{table}{a character string specifying the sex determination system.  Current options are "XY", ZW", "esd"}
 }
 \description{
-A data frame representing the c-matrix scaled to midparent. Column names describe the composite effects}
+A data frame representing the c-matrix scaled to the midparent. Column names describe the composite effects.  The argument "esd" should be used for species that do not have sex chromosomes.}
 \value{
   \item{M}{ mean }
   \item{Aa}{ autosomal additive }
@@ -42,5 +42,5 @@ A data frame representing the c-matrix scaled to midparent. Column names describ
 \author{
 Heath Blackmon and Jeffery P. Demuth}
 \examples{
-cmat <- DisplayCmatrix("MP")
+cmat <- DisplayCmatrix("XY")
 }
